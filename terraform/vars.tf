@@ -1,0 +1,2 @@
+#detalle vars.tf
+

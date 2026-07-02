@@ -1,0 +1,2 @@
+#detalle main.tf
+
