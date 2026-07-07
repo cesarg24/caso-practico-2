@@ -1,2 +1,3 @@
-#detalle hosts
+[webservers]
+130.131.34.208 ansible_user=azureuser ansible_ssh_private_key_file=~/.ssh/id_rsa
 

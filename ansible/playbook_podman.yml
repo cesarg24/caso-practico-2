@@ -1,0 +1,77 @@
+---
+- name: "Configurar VM con Podman y desplegar aplicacion de la VM"
+  hosts: webservers
+  become: true
+
+  vars_files:
+    - secrets.yml
+
+  vars:
+    # Variables basadas en tu infraestructura actual
+    acr_server: "acrcesargcp2.azurecr.io"
+    image_name: "app-web"
+    image_tag: "casopractico2"
+    # El usuario y password se obtienen del portal de Azure (ACR > Access Keys)
+    acr_user: "acrcesargcp2"
+    acr_password: "{{ vault_acr_password }}" 
+
+  tasks:
+    # 1. Instalación de Podman usando el módulo nativo apt
+    - name: "Instalar Podman"
+      ansible.builtin.apt:
+        name: podman
+        state: present
+        update_cache: true
+
+    # 2. Login en el ACR privado
+    - name: "Autenticacion en Azure Container Registry"
+      containers.podman.podman_login:
+        registry: "{{ acr_server }}"
+        username: "{{ acr_user }}"
+        password: "{{ acr_password }}"
+
+    # 3. Descarga de la imagen "horneada" con Apache, HTTPS y Auth
+    - name: "Pull de la imagen desde el ACR"
+      containers.podman.podman_image:
+        name: "{{ acr_server }}/{{ image_name }}:{{ image_tag }}"
+        pull: true
+
+    # 4. Despliegue puro del contenedor
+    - name: "Ejecutar contenedor Apache"
+      containers.podman.podman_container:
+        name: "contenedor-apache-cp2"
+        image: "{{ acr_server }}/{{ image_name }}:{{ image_tag }}"
+        state: started
+        recreate: true
+        ports:
+          - "443:443"
+
+    # 4b. Crear la definición de servicio para systemd usando el módulo nativo copy
+    - name: "Generar archivo de servicio systemd para Podman"
+      ansible.builtin.copy:
+        dest: /etc/systemd/system/container-contenedor-apache-cp2.service
+        mode: '0644'
+        content: |
+          [Unit]
+          Description=Podman container-contenedor-apache-cp2.service
+          Wants=network-online.target
+          After=network-online.target
+
+          [Service]
+          Environment=PODMAN_SYSTEMD_UNIT=%n
+          Restart=always
+          ExecStart=/usr/bin/podman start contenedor-apache-cp2
+          ExecStop=/usr/bin/podman stop -t 10 contenedor-apache-cp2
+          Type=forking
+
+          [Install]
+          WantedBy=multi-user.target
+      register: systemd_file
+
+    # 5. Asegurar que el servicio esté activo, habilitado y recargado si hubo cambios
+    - name: "Habilitar el servicio del sistema para persistencia"
+      ansible.builtin.systemd:
+        name: container-contenedor-apache-cp2
+        enabled: true
+        state: started
+        daemon_reload: "{{ systemd_file.changed }}"
