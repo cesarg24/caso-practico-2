@@ -1,0 +1,29 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: app-casopractico2
+  namespace: casopractico2
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: app-casopractico2
+  template:
+    metadata:
+      labels:
+        app: app-casopractico2
+    spec:
+      securityContext:
+        fsGroup: 1000
+      containers:
+      - name: app-k8s
+        image: acrcesargcp2.azurecr.io/app-k8s:casopractico2
+        ports:
+        - containerPort: 80
+        volumeMounts:
+        - name: storage-casopractico2
+          mountPath: /data
+      volumes:
+      - name: storage-casopractico2
+        persistentVolumeClaim:
+          claimName: pvc-casopractico2

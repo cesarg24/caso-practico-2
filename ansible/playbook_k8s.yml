@@ -1,0 +1,47 @@
+---
+- name: "Desplegar aplicacion con almacenamiento persistente en AKS"
+  hosts: localhost
+  connection: local
+
+  vars:
+    namespace: casopractico2
+    manifests_path: "../kubernetes"
+
+  tasks:
+    - name: "Instalar kubernetes.core collection"
+      command: ansible-galaxy collection install kubernetes.core
+      changed_when: false
+
+    - name: "Crear namespace casopractico2"
+      kubernetes.core.k8s:
+        state: present
+        src: "{{ manifests_path }}/namespace.yaml"
+
+    - name: "Crear PersistentVolumeClaim"
+      kubernetes.core.k8s:
+        state: present
+        src: "{{ manifests_path }}/pvc.yaml"
+
+    - name: "Desplegar aplicacion Flask"
+      kubernetes.core.k8s:
+        state: present
+        src: "{{ manifests_path }}/deployment.yaml"
+
+    - name: "Crear servicio LoadBalancer"
+      kubernetes.core.k8s:
+        state: present
+        src: "{{ manifests_path }}/service.yaml"
+
+    - name: "Esperar IP publica del LoadBalancer"
+      kubernetes.core.k8s_info:
+        kind: Service
+        name: svc-casopractico2
+        namespace: "{{ namespace }}"
+      register: svc
+      until: svc.resources[0].status.loadBalancer.ingress is defined
+      retries: 20
+      delay: 15
+
+    - name: "Mostrar IP publica"
+      debug:
+        msg: "App disponible en http://{{ svc.resources[0].status.loadBalancer.ingress[0].ip }}"
